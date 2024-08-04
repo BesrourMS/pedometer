@@ -6,7 +6,6 @@ class BarometerEnhancedStepCounter {
       accThreshold: 1.2,
       timeThreshold: 250,
       pressureThreshold: 0.1, // hPa, adjust based on testing
-      ...options
     };
     this.steps = 0;
     this.distance = 0; // in meters
@@ -25,7 +24,16 @@ class BarometerEnhancedStepCounter {
   }
 
   updateHeightRelatedParams() {
-    // ... (same as before)
+    // Estimate step length (in meters) based on height
+    this.stepLength = this.options.height * 0.415 / 100;
+    
+    // Adjust thresholds based on height
+    const heightFactor = this.options.height / 170; // 170 cm as base height
+    this.options.gyroThreshold *= heightFactor;
+    this.options.accThreshold *= heightFactor;
+    
+    // Adjust expected cadence (steps per minute) based on height
+    this.expectedCadence = 180 - (this.options.height - 170) * 0.4;
   }
 
   start() {
@@ -101,8 +109,15 @@ class BarometerEnhancedStepCounter {
   }
 
   isValidStep(gyroMagnitude, accMagnitude, pressure, timeSinceLastStep) {
-    // ... (previous checks)
+    const isGyroOverThreshold = gyroMagnitude > this.options.gyroThreshold;
+    const isAccOverThreshold = accMagnitude > this.options.accThreshold;
+    const isTimeThresholdMet = timeSinceLastStep > this.options.timeThreshold;
     
+    // Check if current cadence is within reasonable range
+    const currentCadence = 60000 / timeSinceLastStep; // steps per minute
+    const isCadenceReasonable = currentCadence < this.expectedCadence * 1.5 && 
+                                currentCadence > this.expectedCadence * 0.5;
+
     const pressureChange = this.lastPressure !== null ? Math.abs(pressure - this.lastPressure) : 0;
     const isPressureChangeSignificant = pressureChange > this.options.pressureThreshold;
 
@@ -118,8 +133,21 @@ class BarometerEnhancedStepCounter {
     return false;
   }
 
-  // ... (other methods remain the same)
+  updateBuffer(buffer, value) {
+    if (buffer.length >= this.bufferSize) {
+      buffer.shift();
+    }
+    buffer.push(value);
+  }
 
+  lowPassFilter(buffer) {
+    return buffer.reduce((sum, value) => sum + value, 0) / buffer.length;
+  }
+
+  getSteps() {
+    return this.steps;
+  }
+  
   getElevationGain() {
     return this.elevationGain;
   }
